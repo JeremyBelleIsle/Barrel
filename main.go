@@ -250,23 +250,12 @@ func (g *Game) Update() error {
 			g.PlayerSpeed = 15
 
 			// --- CHANGER DE NIVEAU ---
-			if g.Level == 1 {
-				if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, finishX, finishY, b.w, b.h) {
-					g.Level++
-					g.PlayerX = 160
-					g.PlayerY = 240
-					g.PlayerSpeed = 15
-					g.Generate_Level(g.Level)
-				}
-			} else if g.Level == 2 || g.Level == 3 {
-
-				if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, 490, 400, 100, 50) {
-					g.Level++
-					g.PlayerX = 160
-					g.PlayerY = 240
-					g.PlayerSpeed = 15
-					g.Generate_Level(g.Level)
-				}
+			if b.x == 490 {
+				g.Level++
+				g.PlayerX = 160
+				g.PlayerY = 240
+				g.PlayerSpeed = 15
+				g.Generate_Level(g.Level)
 			}
 		}
 	}
