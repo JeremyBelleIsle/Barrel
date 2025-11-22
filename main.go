@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -9,12 +11,12 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
 const (
 	PlayerR = 30
-	finishX = 490
-	finishY = 215
 )
 
 type Particle struct {
@@ -63,9 +65,21 @@ type Game struct {
 	PlayerY             float64
 	PlayerSpeed         float64
 	PlayerBarrel        int
+	PlayerLife          int
 	PlayerMoved         bool
 }
 
+var (
+	mplusFaceSource *text.GoTextFaceSource
+)
+
+func init() {
+	s, err := text.NewGoTextFaceSource(bytes.NewReader(fonts.PressStart2P_ttf))
+	if err != nil {
+		log.Fatal(err)
+	}
+	mplusFaceSource = s
+}
 func CircleRectCollision(cx, cy, cr, rx, ry, rw, rh float64) bool {
 	closestX := math.Max(rx, math.Min(cx, rx+rw))
 	closestY := math.Max(ry, math.Min(cy, ry+rh))
@@ -133,6 +147,14 @@ func (g *Game) Generate_Level(L int) {
 	}
 }
 func (g *Game) Update() error {
+	if g.PlayerLife == 0 {
+		g.Level = 1
+		g.PlayerX = 160
+		g.PlayerY = 240
+		g.PlayerLife = 3
+		g.PlayerSpeed = 15
+		defer g.Generate_Level(g.Level)
+	}
 	if g.TimeBeforeLevelDown > 0 {
 		g.TimeBeforeLevelDown--
 	}
@@ -153,6 +175,7 @@ func (g *Game) Update() error {
 		g.PlayerX = 160
 		g.PlayerY = 240
 		g.PlayerSpeed = 15
+		g.PlayerLife--
 	}
 
 	// --- SUPPRESSION DES BARILS ---
@@ -222,6 +245,7 @@ func (g *Game) Update() error {
 			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) {
 				g.PlayerX = 160
 				g.PlayerY = 240
+				g.PlayerLife--
 			}
 		}
 	}
@@ -292,6 +316,20 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	//draw Lifes
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(200), float64(50))
+	op.ColorScale.ScaleWithColor(color.RGBA{222, 49, 99, 0})
+	text.Draw(screen, fmt.Sprintf("Vies :%d", g.PlayerLife), &text.GoTextFace{
+		Source: mplusFaceSource,
+		Size:   34,
+	}, op)
+	//draw Level
+	op.GeoM.Translate(float64(0), float64(70))
+	text.Draw(screen, fmt.Sprintf("Level :%d", g.Level), &text.GoTextFace{
+		Source: mplusFaceSource,
+		Size:   34,
+	}, op)
 	//draw barrels
 	for _, b := range g.Barrels {
 		ebitenutil.DrawRect(screen, b.x, b.y, b.w, b.h, b.color)
@@ -325,6 +363,7 @@ func main() {
 		PlayerX:             160,
 		PlayerSpeed:         15,
 		Level:               1,
+		PlayerLife:          3,
 		TimeBeforeLevelDown: -67,
 		Barrels: []BarrelsS{
 			{
