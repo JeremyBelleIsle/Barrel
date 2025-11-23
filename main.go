@@ -33,6 +33,9 @@ type BarrelsS struct {
 	BarrelsDirY bool
 	Moved       bool
 	fragile     bool
+	Teleporter  bool
+	TeleporterX float64
+	TeleporterY float64
 	CoolDown    int
 	color       color.Color
 }
@@ -104,17 +107,17 @@ func (g *Game) Generate_Level(L int) {
 	switch L {
 	case 1:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 215, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Bouncers = []BouncersS{}
 		g.Obstacles = []ObstaclesS{}
 		return
 	case 2:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, true, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 215, 100, 50, true, true, false, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, true, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 215, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Bouncers = []BouncersS{
 			{407, 300, 50, 50, color.RGBA{58, 110, 165, 255}},
@@ -123,9 +126,9 @@ func (g *Game) Generate_Level(L int) {
 		return
 	case 3:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 81, 100, 50, true, true, false, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, true, false, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 81, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{407, 350, 50, 50, false, true, color.RGBA{178, 34, 34, 255}},
@@ -134,9 +137,9 @@ func (g *Game) Generate_Level(L int) {
 		return
 	case 4:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 81, 100, 50, true, true, false, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 81, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{205, 81, 50, 50, true, true, color.RGBA{178, 34, 34, 255}},
@@ -146,15 +149,24 @@ func (g *Game) Generate_Level(L int) {
 		}
 	case 5:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, true, false, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 0, 100, 50, true, true, true, 100, color.RGBA{139, 69, 19, 255}},
-			{375, 250, 100, 50, false, true, false, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 50, 100, 50, true, false, false, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 0, 100, 50, true, true, true, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{375, 250, 100, 50, false, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{205, 300, 50, 50, true, false, color.RGBA{178, 34, 34, 255}},
 			{310, 50, 50, 50, false, false, color.RGBA{178, 34, 34, 255}},
 		}
+		g.Bouncers = []BouncersS{}
+	case 6:
+		g.Barrels = []BarrelsS{
+			{50, 215, 100, 50, true, false, false, false, 330, 60, 100, color.RGBA{139, 69, 19, 255}},
+			{400, 215, 100, 50, true, false, false, true, 330, 75, 100, color.RGBA{139, 69, 19, 255}},
+			{250, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+		}
+		g.Obstacles = []ObstaclesS{}
 		g.Bouncers = []BouncersS{}
 	}
 }
@@ -228,6 +240,10 @@ func (g *Game) Update() error {
 				deleteBarrels = append(deleteBarrels, i)
 				b.CoolDown = 100
 			}
+		}
+		if b.Teleporter && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
+			g.PlayerX = b.TeleporterX
+			g.PlayerY = b.TeleporterY
 		}
 		if !CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
 			b.color = color.RGBA{139, 69, 19, 255}
@@ -362,7 +378,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	for _, p := range g.Particles {
 		ebitenutil.DrawRect(screen, p.x, p.y, 4, 4, p.color)
 	}
-
+	//draw teleporter lines
+	for _, b := range g.Barrels {
+		if b.Teleporter {
+			ebitenutil.DrawLine(screen, b.x, b.y, b.TeleporterX, b.TeleporterY, color.White)
+		}
+	}
 	//draw player
 	ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 }
@@ -390,6 +411,9 @@ func main() {
 				BarrelsDirY: true,
 				Moved:       false,
 				fragile:     false,
+				Teleporter:  false,
+				TeleporterX: 0,
+				TeleporterY: 0,
 				CoolDown:    100,
 				color:       color.RGBA{139, 69, 19, 255},
 			},
@@ -401,6 +425,9 @@ func main() {
 				BarrelsDirY: true,
 				Moved:       false,
 				fragile:     false,
+				Teleporter:  false,
+				TeleporterX: 0,
+				TeleporterY: 0,
 				CoolDown:    100,
 				color:       color.RGBA{139, 69, 19, 255},
 			},
