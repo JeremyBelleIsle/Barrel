@@ -161,12 +161,24 @@ func (g *Game) Generate_Level(L int) {
 		g.Bouncers = []BouncersS{}
 	case 6:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, false, 330, 60, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 			{400, 215, 100, 50, true, false, false, true, 330, 75, 100, color.RGBA{139, 69, 19, 255}},
 			{250, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{}
+		g.Bouncers = []BouncersS{}
+
+	case 7:
+		g.Barrels = []BarrelsS{
+			{50, 375, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{350, 215, 100, 50, true, true, false, true, 530, 240, 100, color.RGBA{139, 69, 19, 255}},
+			{450, 215, 100, 50, false, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+		}
+		g.Obstacles = []ObstaclesS{
+			{270, 300, 50, 50, false, false, color.RGBA{178, 34, 34, 255}},
+		}
 		g.Bouncers = []BouncersS{}
 	}
 }
@@ -204,8 +216,13 @@ func (g *Game) Update() error {
 	}
 	if g.TimeBeforeLevelDown == 0 {
 		g.Level--
-		g.PlayerX = 160
-		g.PlayerY = 240
+		if g.Level != 7 {
+			g.PlayerX = 160
+			g.PlayerY = 240
+		} else {
+			g.PlayerX = 160
+			g.PlayerY = 400
+		}
 		g.PlayerSpeed = 15
 		defer g.Generate_Level(g.Level)
 		g.TimeBeforeLevelDown = -67
@@ -216,8 +233,13 @@ func (g *Game) Update() error {
 		g.PlayerY-PlayerR < 0 ||
 		g.PlayerY+PlayerR > 480 {
 
-		g.PlayerX = 160
-		g.PlayerY = 240
+		if g.Level != 7 {
+			g.PlayerX = 160
+			g.PlayerY = 240
+		} else {
+			g.PlayerX = 160
+			g.PlayerY = 400
+		}
 		g.PlayerSpeed = 15
 		g.PlayerLife--
 	}
@@ -295,8 +317,13 @@ func (g *Game) Update() error {
 			}
 
 			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) {
-				g.PlayerX = 160
-				g.PlayerY = 240
+				if g.Level != 7 {
+					g.PlayerX = 160
+					g.PlayerY = 240
+				} else {
+					g.PlayerX = 160
+					g.PlayerY = 400
+				}
 				g.PlayerLife--
 			}
 		}
@@ -328,8 +355,13 @@ func (g *Game) Update() error {
 			// --- CHANGER DE NIVEAU ---
 			if b.x == 490 {
 				g.Level++
-				g.PlayerX = 160
-				g.PlayerY = 240
+				if g.Level != 7 {
+					g.PlayerX = 160
+					g.PlayerY = 240
+				} else {
+					g.PlayerX = 160
+					g.PlayerY = 400
+				}
 				g.PlayerSpeed = 15
 				g.Generate_Level(g.Level)
 			}
@@ -339,8 +371,13 @@ func (g *Game) Update() error {
 	// --- OBSTACLES NORMAUX ---
 	for _, o := range g.Obstacles {
 		if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) {
-			g.PlayerX = 160
-			g.PlayerY = 240
+			if g.Level != 7 {
+				g.PlayerX = 160
+				g.PlayerY = 240
+			} else {
+				g.PlayerX = 160
+				g.PlayerY = 400
+			}
 			g.PlayerSpeed = 15
 		}
 	}
@@ -397,7 +434,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	//draw player
 	ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 	//draw version
-	ebitenutil.DebugPrintAt(screen, "version 0.6", 640-120, 480-20)
+	ebitenutil.DebugPrintAt(screen, "version 0.8", 640-120, 480-20)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
