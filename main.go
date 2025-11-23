@@ -170,6 +170,26 @@ func (g *Game) Generate_Level(L int) {
 		g.Bouncers = []BouncersS{}
 	}
 }
+func (g *Game) DrawLifes(screen *ebiten.Image) error {
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(200), float64(50))
+	op.ColorScale.ScaleWithColor(color.RGBA{222, 49, 99, 0})
+	text.Draw(screen, fmt.Sprintf("Vies :%d", g.PlayerLife), &text.GoTextFace{
+		Source: mplusFaceSource,
+		Size:   34,
+	}, op)
+	return nil
+}
+func (g *Game) DrawLevel(screen *ebiten.Image) error {
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(200), float64(90))
+	op.ColorScale.ScaleWithColor(color.RGBA{222, 49, 99, 0})
+	text.Draw(screen, fmt.Sprintf("Level :%d", g.Level), &text.GoTextFace{
+		Source: mplusFaceSource,
+		Size:   34,
+	}, op)
+	return nil
+}
 func (g *Game) Update() error {
 	if g.PlayerLife == 0 {
 		g.Level = 1
@@ -349,19 +369,9 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	//draw Lifes
-	op := &text.DrawOptions{}
-	op.GeoM.Translate(float64(200), float64(50))
-	op.ColorScale.ScaleWithColor(color.RGBA{222, 49, 99, 0})
-	text.Draw(screen, fmt.Sprintf("Vies :%d", g.PlayerLife), &text.GoTextFace{
-		Source: mplusFaceSource,
-		Size:   34,
-	}, op)
+	g.DrawLifes(screen)
 	//draw Level
-	op.GeoM.Translate(float64(0), float64(70))
-	text.Draw(screen, fmt.Sprintf("Level :%d", g.Level), &text.GoTextFace{
-		Source: mplusFaceSource,
-		Size:   34,
-	}, op)
+	g.DrawLevel(screen)
 	//draw barrels
 	for _, b := range g.Barrels {
 		ebitenutil.DrawRect(screen, b.x, b.y, b.w, b.h, b.color)
@@ -386,6 +396,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	//draw player
 	ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
+	//draw version
+	ebitenutil.DebugPrintAt(screen, "version 0.6", 640-120, 480-20)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
