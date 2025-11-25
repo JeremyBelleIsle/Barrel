@@ -70,6 +70,7 @@ type Game struct {
 	Opacity               float64
 	OpacityPlusOrNegative bool
 	ChangeLevelAnimation  bool
+	EndOfRun              bool
 	TimeBeforeLevelDown   int
 	SpaceCNT              int
 	PlayerX               float64
@@ -200,6 +201,16 @@ func (g *Game) DrawLifes(screen *ebiten.Image) error {
 	}, op)
 	return nil
 }
+func (g *Game) DrawTimer(screen *ebiten.Image) error {
+	if g.SpaceCNT == 0 {
+		ebitenutil.DebugPrintAt(screen, "Time: 0:0:00", 5, 5)
+	} else if g.Level != 8 {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", time.Since(g.StartTime).Round(10*time.Millisecond)), 5, 5)
+	} else if g.EndOfRun {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", g.endTime), 5, 5)
+	}
+	return nil
+}
 func (g *Game) DrawLevel(screen *ebiten.Image) error {
 	op := &text.DrawOptions{}
 	op.GeoM.Translate(float64(200), float64(90))
@@ -210,8 +221,12 @@ func (g *Game) DrawLevel(screen *ebiten.Image) error {
 	}, op)
 	return nil
 }
+func Within(px, py, rx, ry, rw, rh float64) bool {
+	return px >= rx && px <= rx+rw && py >= ry && py <= ry+rh
+}
 func (g *Game) Update() error {
-	println(g.Opacity)
+	xC, yC := ebiten.CursorPosition()
+	x, y := float64(xC), float64(yC)
 	if g.ChangeLevelAnimation && g.Opacity > 255 {
 		g.OpacityPlusOrNegative = false
 	}
@@ -224,6 +239,32 @@ func (g *Game) Update() error {
 	}
 	if g.OpacityPlusOrNegative && g.ChangeLevelAnimation {
 		g.Opacity += 2
+	}
+	if g.EndOfRun {
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			if Within(x, y, 170, 183, 312, 63) {
+				g.Level = 1
+				g.PlayerY = 240
+				g.PlayerX = 160
+				g.PlayerSpeed = 15
+				g.OpacityPlusOrNegative = true
+				g.PlayerLife = 3
+				g.TimeBeforeLevelDown = -67
+				g.Particles = nil
+				g.Barrels = nil
+				g.Obstacles = nil
+				g.Bouncers = nil
+				g.SpaceCNT = 0
+				g.PlayerBarrel = 0
+				g.PlayerMoved = false
+				g.StartTime = time.Time{}
+				g.endTime = 0
+				g.EndTimeIsSet = false
+				g.Opacity = 0
+				g.ChangeLevelAnimation = false
+				g.Generate_Level(g.Level)
+			}
+		}
 	}
 	if g.ChangeLevelAnimation && g.Opacity <= 0 {
 		g.ChangeLevelAnimation = false
@@ -238,7 +279,7 @@ func (g *Game) Update() error {
 		g.PlayerSpeed = 15
 		g.OpacityPlusOrNegative = true
 	}
-	if g.Level == 8 && !g.EndTimeIsSet {
+	if g.EndOfRun && !g.EndTimeIsSet {
 		g.endTime = time.Since(g.StartTime).Round(10 * time.Millisecond)
 		g.EndTimeIsSet = true
 	}
@@ -397,7 +438,7 @@ func (g *Game) Update() error {
 			g.PlayerSpeed = 15
 
 			// --- CHANGER DE NIVEAU ---
-			if b.x == 490 {
+			if b.x == 490 && !g.ChangeLevelAnimation {
 				g.Level++
 				g.ChangeLevelAnimation = true
 				if g.Level != 7 {
@@ -464,15 +505,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	//draw player
 	ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 	//draw version
-	if g.SpaceCNT == 0 {
-		ebitenutil.DebugPrintAt(screen, "Time: 0:0:00", 5, 5)
-	} else if g.Level != 8 {
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", time.Since(g.StartTime).Round(10*time.Millisecond)), 5, 5)
-	} else if g.Level == 8 {
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", g.endTime), 5, 5)
-	}
+	ebitenutil.DebugPrintAt(screen, "version 1.0", 550, 460)
+	//draw timer
+	g.DrawTimer(screen)
 	//draw change level animation
 	ebitenutil.DrawRect(screen, 0, 0, 640, 480, color.RGBA{0, 0, 0, uint8(g.Opacity)})
+	//draw Restart button
+	if g.EndOfRun {
+		ebitenutil.DrawRect(screen, 170, 183, 312, 63, color.RGBA{0, 255, 0, 255})
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(float64(171), float64(190))
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, "Restart", &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   45,
+		}, op)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -486,7 +534,7 @@ func main() {
 		PlayerY:               240,
 		PlayerX:               160,
 		PlayerSpeed:           15,
-		Level:                 1,
+		Level:                 8,
 		OpacityPlusOrNegative: true,
 		PlayerLife:            3,
 		TimeBeforeLevelDown:   -67,
