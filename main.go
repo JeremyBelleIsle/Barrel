@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -58,18 +59,25 @@ type ObstaclesS struct {
 	color         color.Color
 }
 type Game struct {
-	Level               int
-	Particles           []Particle
-	Barrels             []BarrelsS
-	Obstacles           []ObstaclesS
-	Bouncers            []BouncersS
-	TimeBeforeLevelDown int
-	PlayerX             float64
-	PlayerY             float64
-	PlayerSpeed         float64
-	PlayerBarrel        int
-	PlayerLife          int
-	PlayerMoved         bool
+	Level                 int
+	Particles             []Particle
+	Barrels               []BarrelsS
+	Obstacles             []ObstaclesS
+	Bouncers              []BouncersS
+	StartTime             time.Time
+	endTime               time.Duration
+	EndTimeIsSet          bool
+	Opacity               float64
+	OpacityPlusOrNegative bool
+	ChangeLevelAnimation  bool
+	TimeBeforeLevelDown   int
+	SpaceCNT              int
+	PlayerX               float64
+	PlayerY               float64
+	PlayerSpeed           float64
+	PlayerBarrel          int
+	PlayerLife            int
+	PlayerMoved           bool
 }
 
 var (
@@ -203,6 +211,37 @@ func (g *Game) DrawLevel(screen *ebiten.Image) error {
 	return nil
 }
 func (g *Game) Update() error {
+	println(g.Opacity)
+	if g.ChangeLevelAnimation && g.Opacity > 255 {
+		g.OpacityPlusOrNegative = false
+	}
+	if !g.OpacityPlusOrNegative {
+		g.Opacity -= 2
+		g.Generate_Level(g.Level)
+	}
+	if g.ChangeLevelAnimation && g.Opacity < 255 && g.OpacityPlusOrNegative {
+		g.OpacityPlusOrNegative = true
+	}
+	if g.OpacityPlusOrNegative && g.ChangeLevelAnimation {
+		g.Opacity += 2
+	}
+	if g.ChangeLevelAnimation && g.Opacity <= 0 {
+		g.ChangeLevelAnimation = false
+		g.Opacity = 0
+		if g.Level != 7 {
+			g.PlayerX = 160
+			g.PlayerY = 240
+		} else {
+			g.PlayerX = 160
+			g.PlayerY = 400
+		}
+		g.PlayerSpeed = 15
+		g.OpacityPlusOrNegative = true
+	}
+	if g.Level == 8 && !g.EndTimeIsSet {
+		g.endTime = time.Since(g.StartTime).Round(10 * time.Millisecond)
+		g.EndTimeIsSet = true
+	}
 	if g.PlayerLife == 0 {
 		g.Level = 1
 		g.PlayerX = 160
@@ -214,7 +253,7 @@ func (g *Game) Update() error {
 	if g.TimeBeforeLevelDown > 0 {
 		g.TimeBeforeLevelDown--
 	}
-	if g.TimeBeforeLevelDown == 0 {
+	if g.TimeBeforeLevelDown == 0 && !g.ChangeLevelAnimation {
 		g.Level--
 		if g.Level != 7 {
 			g.PlayerX = 160
@@ -228,10 +267,11 @@ func (g *Game) Update() error {
 		g.TimeBeforeLevelDown = -67
 	}
 	// --- BORDS DE L'ÉCRAN ---
-	if g.PlayerX-PlayerR < 0 ||
+	if (g.PlayerX-PlayerR < 0 ||
 		g.PlayerX+PlayerR > 640 ||
 		g.PlayerY-PlayerR < 0 ||
-		g.PlayerY+PlayerR > 480 {
+		g.PlayerY+PlayerR > 480) &&
+		!g.ChangeLevelAnimation {
 
 		if g.Level != 7 {
 			g.PlayerX = 160
@@ -276,7 +316,7 @@ func (g *Game) Update() error {
 		if b.fragile && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
 			b.CoolDown--
 			b.color = color.RGBA{255, 0, 0, 255}
-			if b.CoolDown <= 0 {
+			if b.CoolDown <= 0 && !g.ChangeLevelAnimation {
 				g.TimeBeforeLevelDown = 45
 				g.SpawnBarrelExplosion(b.x, b.y)
 				deleteBarrels = append(deleteBarrels, i)
@@ -315,23 +355,27 @@ func (g *Game) Update() error {
 			} else {
 				o.y -= 2
 			}
-
-			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) {
-				if g.Level != 7 {
-					g.PlayerX = 160
-					g.PlayerY = 240
-				} else {
-					g.PlayerX = 160
-					g.PlayerY = 400
-				}
-				g.PlayerLife--
+		}
+		if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) && !g.ChangeLevelAnimation {
+			if g.Level != 7 {
+				g.PlayerX = 160
+				g.PlayerY = 240
+			} else {
+				g.PlayerX = 160
+				g.PlayerY = 400
 			}
+			g.PlayerLife--
+			g.PlayerSpeed = 15
 		}
 	}
 
 	// --- MOUVEMENT DU PLAYER ---
 	if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.PlayerMoved {
 		g.PlayerMoved = true
+		g.SpaceCNT++
+		if g.SpaceCNT == 1 {
+			g.StartTime = time.Now()
+		}
 	}
 	if g.PlayerMoved {
 		g.PlayerX += g.PlayerSpeed
@@ -355,6 +399,7 @@ func (g *Game) Update() error {
 			// --- CHANGER DE NIVEAU ---
 			if b.x == 490 {
 				g.Level++
+				g.ChangeLevelAnimation = true
 				if g.Level != 7 {
 					g.PlayerX = 160
 					g.PlayerY = 240
@@ -363,22 +408,7 @@ func (g *Game) Update() error {
 					g.PlayerY = 400
 				}
 				g.PlayerSpeed = 15
-				g.Generate_Level(g.Level)
 			}
-		}
-	}
-
-	// --- OBSTACLES NORMAUX ---
-	for _, o := range g.Obstacles {
-		if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, o.x, o.y, o.w, o.h) {
-			if g.Level != 7 {
-				g.PlayerX = 160
-				g.PlayerY = 240
-			} else {
-				g.PlayerX = 160
-				g.PlayerY = 400
-			}
-			g.PlayerSpeed = 15
 		}
 	}
 
@@ -434,7 +464,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	//draw player
 	ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 	//draw version
-	ebitenutil.DebugPrintAt(screen, "version 0.8", 640-120, 480-20)
+	if g.SpaceCNT == 0 {
+		ebitenutil.DebugPrintAt(screen, "Time: 0:0:00", 5, 5)
+	} else if g.Level != 8 {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", time.Since(g.StartTime).Round(10*time.Millisecond)), 5, 5)
+	} else if g.Level == 8 {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", g.endTime), 5, 5)
+	}
+	//draw change level animation
+	ebitenutil.DrawRect(screen, 0, 0, 640, 480, color.RGBA{0, 0, 0, uint8(g.Opacity)})
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -445,12 +483,13 @@ func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello World - Ebiten")
 	g := &Game{
-		PlayerY:             240,
-		PlayerX:             160,
-		PlayerSpeed:         15,
-		Level:               1,
-		PlayerLife:          3,
-		TimeBeforeLevelDown: -67,
+		PlayerY:               240,
+		PlayerX:               160,
+		PlayerSpeed:           15,
+		Level:                 1,
+		OpacityPlusOrNegative: true,
+		PlayerLife:            3,
+		TimeBeforeLevelDown:   -67,
 		Barrels: []BarrelsS{
 			{
 				x:           50,
