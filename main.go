@@ -82,9 +82,16 @@ type Game struct {
 	EndTimeIsSet          bool
 	DataAreSave           bool
 	Opacity               float64
+	Radius1               float64
+	Radius2               float64
+	Radius3               float64
+	MOL1                  bool
+	MOL2                  bool
+	MOL3                  bool
 	OpacityPlusOrNegative bool
 	ChangeLevelAnimation  bool
 	EndOfRun              bool
+	TimeSaveAnimation     float64
 	TimeBeforeLevelDown   int
 	SpaceCNT              int
 	PlayerX               float64
@@ -221,7 +228,7 @@ func (g *Game) DrawTimer(screen *ebiten.Image) error {
 		ebitenutil.DebugPrintAt(screen, "Time: 0:0:00", 5, 5)
 	} else if g.Level != 8 {
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", time.Since(g.StartTime).Round(10*time.Millisecond)), 5, 5)
-	} else if g.State == 3 {
+	} else if g.State == 4 {
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", g.endTime), 5, 5)
 	}
 	return nil
@@ -272,11 +279,17 @@ func CmpTime(a, b Score) int {
 }
 
 func (g *Game) Update() error {
+	if g.TimeSaveAnimation > 0 && g.State == 1 {
+		g.TimeSaveAnimation--
+	}
+	if g.TimeSaveAnimation == 0 && g.State == 1 {
+		g.State++
+	}
 	if ebiten.IsKeyPressed(ebiten.KeyControlLeft) {
 		os.Remove("save.json")
 		g.Save = SaveData{}
 	}
-	if g.State > 0 {
+	if g.State > 1 {
 		xC, yC := ebiten.CursorPosition()
 		x, y := float64(xC), float64(yC)
 		if g.ChangeLevelAnimation && g.Opacity > 255 {
@@ -292,7 +305,7 @@ func (g *Game) Update() error {
 		if g.OpacityPlusOrNegative && g.ChangeLevelAnimation {
 			g.Opacity += 2
 		}
-		if g.State == 3 {
+		if g.State == 4 {
 			if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 				if Within(x, y, 170, 183, 312, 63) {
 					g.Level = 1
@@ -315,7 +328,7 @@ func (g *Game) Update() error {
 					g.Opacity = 0
 					g.ChangeLevelAnimation = false
 					g.Generate_Level(g.Level)
-					g.State = 1
+					g.State = 2
 				}
 			}
 		}
@@ -332,11 +345,11 @@ func (g *Game) Update() error {
 			g.PlayerSpeed = 15
 			g.OpacityPlusOrNegative = true
 		}
-		if g.State == 3 && !g.EndTimeIsSet {
+		if g.State == 4 && !g.EndTimeIsSet {
 			g.endTime = time.Since(g.StartTime).Round(10 * time.Millisecond)
 			g.EndTimeIsSet = true
 		}
-		if g.State == 3 && !g.DataAreSave {
+		if g.State == 4 && !g.DataAreSave {
 			// Ajouter le temps du joueur
 			g.Save.Top5 = append(g.Save.Top5, Score{
 				Time:     g.endTime,
@@ -486,7 +499,7 @@ func (g *Game) Update() error {
 			g.PlayerMoved = true
 			g.SpaceCNT++
 			if g.SpaceCNT == 1 {
-				g.State = 2
+				g.State++
 				g.StartTime = time.Now()
 			}
 		}
@@ -560,17 +573,17 @@ func (g *Game) Update() error {
 		// 3. Fin de la saisie si l’utilisateur appuie sur Enter
 		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
 			fmt.Println("Nom terminé:", g.currentUserName)
-			g.State = 1
+			g.State++
 		}
 	}
 	if g.Level == 8 {
-		g.State = 3
+		g.State = 4
 	}
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	if g.State > 0 {
+	if g.State > 1 {
 		//draw Lifes
 		g.DrawLifes(screen)
 		//draw Level
@@ -606,7 +619,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		//draw change level animation
 		ebitenutil.DrawRect(screen, 0, 0, 640, 480, color.RGBA{0, 0, 0, uint8(g.Opacity)})
 		//draw Restart button
-		if g.State == 3 {
+		if g.State == 4 {
 			ebitenutil.DrawRect(screen, 170, 183, 312, 63, color.RGBA{0, 255, 0, 255})
 			op := &text.DrawOptions{}
 			op.GeoM.Translate(float64(171), float64(190))
@@ -626,16 +639,45 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			Size:   30,
 		}, op)
 	}
-	if g.State == 1 {
-		ebitenutil.DrawRect(screen, 50, 300, 400, 100, color.RGBA{0, 255, 0, 255})
+	if g.State == 2 {
+		ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
 		for i, s := range g.Save.Top5 {
 			op := &text.DrawOptions{}
-			op.GeoM.Translate(float64(50), float64(20*i+300))
+			op.GeoM.Translate(float64(100), float64(20*i+300))
 			op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
 			text.Draw(screen, fmt.Sprintf("%d. %v. - %s", i+1, s.Time, s.UserName), &text.GoTextFace{
 				Source: mplusFaceSource,
 				Size:   20,
 			}, op)
+		}
+	}
+	if g.State == 1 {
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(float64(50), float64(230))
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, "Downloading UserName...", &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   20,
+		}, op)
+	}
+	if g.State == 1 {
+		centerX, centerY := 320.0, 420.0 // position centrale (modifie selon ton UI)
+		spacing := 34.0                  // espacement horizontal entre points
+		baseR := 8.0                     // rayon de base
+		speed := 6.45                    // vitesse des pulsations
+
+		for i := 0; i < 3; i++ {
+			// phase décallée pour chaque point
+			phase := float64(i) * 0.9
+
+			// sin pour aller de -1..1, on transforme en 0..1 puis en scale 0.6..1.4
+			s := (math.Sin(g.TimeSaveAnimation*speed+phase) + 1.0) / 2.0
+			scale := 0.6 + 0.8*s // nombre entre 0.6 et 1.4
+
+			r := baseR * scale
+			x := centerX + (float64(i)-1.0)*spacing
+			// couleur : blanc, tu peux changer
+			ebitenutil.DrawCircle(screen, x, centerY, r, color.RGBA{255, 255, 255, 255})
 		}
 	}
 }
@@ -663,7 +705,9 @@ func main() {
 		OpacityPlusOrNegative: true,
 		PlayerLife:            3,
 		TimeBeforeLevelDown:   -67,
-		Top5Bestplayers:       save.Top5, // récupérer le top5 depuis la sauvegarde
+		TimeSaveAnimation:     70,
+
+		Top5Bestplayers: save.Top5, // récupérer le top5 depuis la sauvegarde
 		Barrels: []BarrelsS{
 			{
 				x:           50,
