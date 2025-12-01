@@ -9,10 +9,16 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -82,16 +88,13 @@ type Game struct {
 	EndTimeIsSet          bool
 	DataAreSave           bool
 	Opacity               float64
-	Radius1               float64
-	Radius2               float64
-	Radius3               float64
-	MOL1                  bool
-	MOL2                  bool
-	MOL3                  bool
+	teleportSound         *audio.Player
 	OpacityPlusOrNegative bool
 	ChangeLevelAnimation  bool
 	EndOfRun              bool
 	TimeSaveAnimation     float64
+	ValidUserName         int
+	TUNE                  float64
 	TimeBeforeLevelDown   int
 	SpaceCNT              int
 	PlayerX               float64
@@ -106,6 +109,7 @@ type Game struct {
 var (
 	mplusFaceSource *text.GoTextFaceSource
 )
+var audioContext = audio.NewContext(44100)
 
 func init() {
 	s, err := text.NewGoTextFaceSource(bytes.NewReader(fonts.PressStart2P_ttf))
@@ -134,6 +138,45 @@ func (g *Game) SpawnBarrelExplosion(x, y float64) {
 		})
 	}
 }
+func IsAlphaNumeric(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+func LoadSound(path string) (*audio.Player, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %q: %w", path, err)
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	switch ext {
+
+	case ".wav":
+		stream, err := wav.Decode(audioContext, bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("cannot decode wav %q: %w", path, err)
+		}
+		fmt.Printf("Sound load with success!")
+		return audio.NewPlayer(audioContext, stream)
+
+	case ".ogg", ".oga", ".vorbis":
+		stream, err := vorbis.Decode(audioContext, bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("cannot decode ogg %q: %w", path, err)
+		}
+		fmt.Printf("Sound load with success!")
+		return audio.NewPlayer(audioContext, stream)
+
+	default:
+		return nil, fmt.Errorf("unsupported audio extension %q", ext)
+	}
+}
+
 func (g *Game) Generate_Level(L int) {
 	switch L {
 	case 1:
@@ -186,7 +229,7 @@ func (g *Game) Generate_Level(L int) {
 			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
-			{205, 300, 50, 50, true, false, color.RGBA{178, 34, 34, 255}},
+			{240, 300, 50, 50, true, false, color.RGBA{178, 34, 34, 255}},
 			{310, 50, 50, 50, false, false, color.RGBA{178, 34, 34, 255}},
 		}
 		g.Bouncers = []BouncersS{}
@@ -279,11 +322,42 @@ func CmpTime(a, b Score) int {
 }
 
 func (g *Game) Update() error {
+	if g.TUNE > 0 {
+		g.TUNE--
+	}
 	if g.TimeSaveAnimation > 0 && g.State == 1 {
 		g.TimeSaveAnimation--
 	}
 	if g.TimeSaveAnimation == 0 && g.State == 1 {
 		g.State++
+	}
+	if g.TimeSaveAnimation == 1 && g.State == 1 {
+		if len(g.currentUserName) > 7 {
+			g.ValidUserName = 1
+			g.TUNE = 80
+			g.TimeSaveAnimation = 70
+			g.State = 0
+		}
+		if !IsAlphaNumeric(g.currentUserName) {
+			g.ValidUserName = 2
+			g.TUNE = 80
+			g.TimeSaveAnimation = 70
+			g.State = 0
+		}
+		if len(g.currentUserName) == 0 {
+			g.ValidUserName = 3
+			g.TUNE = 80
+			g.TimeSaveAnimation = 70
+			g.State = 0
+		}
+		for _, score := range g.Save.Top5 {
+			if g.currentUserName == score.UserName {
+				g.ValidUserName = 4
+				g.TimeSaveAnimation = 70
+				g.TUNE = 80
+				g.State = 0
+			}
+		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyControlLeft) {
 		os.Remove("save.json")
@@ -449,6 +523,8 @@ func (g *Game) Update() error {
 				}
 			}
 			if b.Teleporter && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
+				g.teleportSound.Rewind()
+				g.teleportSound.Play()
 				g.PlayerX = b.TeleporterX
 				g.PlayerY = b.TeleporterY
 			}
@@ -680,6 +756,28 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			ebitenutil.DrawCircle(screen, x, centerY, r, color.RGBA{255, 255, 255, 255})
 		}
 	}
+	if g.TUNE > 0 && g.ValidUserName != 0 {
+		var msg string
+		switch g.ValidUserName {
+		case 1:
+			msg = "Username is too long."
+		case 2:
+			msg = "Username must be alphanumeric."
+		case 3:
+			msg = "Username cannot be empty."
+		case 4:
+			msg = "Username already exists."
+		default:
+			msg = "Unknown username error."
+		}
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(10, 420)
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, msg, &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   20,
+		}, op)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -691,7 +789,7 @@ func main() {
 	ebiten.SetWindowTitle("Hello World")
 	save, err := LoadFromDisk("save.json")
 	if err != nil {
-		fmt.Println("Aucune sauvegarde trouvée, valeurs par défaut...")
+		fmt.Println("file save.json are mepty")
 		save = SaveData{
 			Top5: []Score{}, // initialiser le slice vide
 		}
@@ -738,6 +836,11 @@ func main() {
 				color:       color.RGBA{139, 69, 19, 255},
 			},
 		},
+	}
+
+	g.teleportSound, err = LoadSound("laserLarge_004.ogg")
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	if err := ebiten.RunGame(g); err != nil {
