@@ -31,6 +31,7 @@ const (
 type Score struct {
 	Time     time.Duration
 	UserName string
+	Code     string
 }
 
 type SaveData struct {
@@ -95,8 +96,12 @@ type Game struct {
 	TimeSaveAnimation     float64
 	ValidUserName         int
 	TUNE                  float64
+	CurrentCode           string
+	InvalidCode           bool
+	TSICM                 float64
 	TimeBeforeLevelDown   int
 	SpaceCNT              int
+	EnterCNT              int
 	PlayerX               float64
 	PlayerY               float64
 	PlayerSpeed           float64
@@ -271,7 +276,7 @@ func (g *Game) DrawTimer(screen *ebiten.Image) error {
 		ebitenutil.DebugPrintAt(screen, "Time: 0:0:00", 5, 5)
 	} else if g.Level != 8 {
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", time.Since(g.StartTime).Round(10*time.Millisecond)), 5, 5)
-	} else if g.State == 4 {
+	} else if g.State == 5 {
 		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Time: %s", g.endTime), 5, 5)
 	}
 	return nil
@@ -325,6 +330,9 @@ func (g *Game) Update() error {
 	if g.TUNE > 0 {
 		g.TUNE--
 	}
+	if g.TSICM > 0 {
+		g.TSICM--
+	}
 	if g.TimeSaveAnimation > 0 && g.State == 1 {
 		g.TimeSaveAnimation--
 	}
@@ -350,20 +358,12 @@ func (g *Game) Update() error {
 			g.TimeSaveAnimation = 70
 			g.State = 0
 		}
-		for _, score := range g.Save.Top5 {
-			if g.currentUserName == score.UserName {
-				g.ValidUserName = 4
-				g.TimeSaveAnimation = 70
-				g.TUNE = 80
-				g.State = 0
-			}
-		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyControlLeft) {
 		os.Remove("save.json")
 		g.Save = SaveData{}
 	}
-	if g.State > 1 {
+	if g.State > 2 {
 		xC, yC := ebiten.CursorPosition()
 		x, y := float64(xC), float64(yC)
 		if g.ChangeLevelAnimation && g.Opacity > 255 {
@@ -379,7 +379,7 @@ func (g *Game) Update() error {
 		if g.OpacityPlusOrNegative && g.ChangeLevelAnimation {
 			g.Opacity += 2
 		}
-		if g.State == 4 {
+		if g.State == 5 {
 			if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 				if Within(x, y, 170, 183, 312, 63) {
 					g.Level = 1
@@ -402,7 +402,7 @@ func (g *Game) Update() error {
 					g.Opacity = 0
 					g.ChangeLevelAnimation = false
 					g.Generate_Level(g.Level)
-					g.State = 2
+					g.State = 3
 				}
 			}
 		}
@@ -419,15 +419,16 @@ func (g *Game) Update() error {
 			g.PlayerSpeed = 15
 			g.OpacityPlusOrNegative = true
 		}
-		if g.State == 4 && !g.EndTimeIsSet {
+		if g.State == 5 && !g.EndTimeIsSet {
 			g.endTime = time.Since(g.StartTime).Round(10 * time.Millisecond)
 			g.EndTimeIsSet = true
 		}
-		if g.State == 4 && !g.DataAreSave {
+		if g.State == 5 && !g.DataAreSave {
 			// Ajouter le temps du joueur
 			g.Save.Top5 = append(g.Save.Top5, Score{
 				Time:     g.endTime,
 				UserName: g.currentUserName,
+				Code:     g.CurrentCode,
 			})
 
 			// Trier et garder seulement les 5 meilleurs
@@ -648,18 +649,88 @@ func (g *Game) Update() error {
 
 		// 3. Fin de la saisie si l’utilisateur appuie sur Enter
 		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
-			fmt.Println("Nom terminé:", g.currentUserName)
-			g.State++
+			g.EnterCNT++
+			if g.EnterCNT == 1 {
+				fmt.Println("Nom terminé:", g.currentUserName)
+				g.State++
+			}
+		} else {
+			g.EnterCNT = 0
+		}
+	}
+
+	if g.State == 2 {
+		// 1. si le nom n'existe pas alors on peut créer un code
+		canCreateCode := true
+		for _, score := range g.Save.Top5 {
+			if g.currentUserName == score.UserName {
+				canCreateCode = false
+				break
+			}
+		}
+		if canCreateCode {
+			// 2. Récupérer le texte tapé cette frame
+			typed := ebiten.InputChars()
+			if len(typed) > 0 {
+				g.CurrentCode += string(typed)
+			}
+
+			// 3. Supprimer un caractère avec Backspace
+			if ebiten.IsKeyPressed(ebiten.KeyBackspace) && len(g.CurrentCode) > 0 {
+				g.CurrentCode = g.CurrentCode[:len(g.CurrentCode)-1]
+			}
+
+			// 4. Fin de la saisie si l’utilisateur appuie sur Enter
+			if ebiten.IsKeyPressed(ebiten.KeyEnter) {
+				g.EnterCNT++
+				if g.EnterCNT == 1 {
+					fmt.Println("Code terminé:", g.CurrentCode)
+					g.State++
+				}
+			} else {
+				g.EnterCNT = 0
+			}
+		} else {
+			// 2. Récupérer le texte tapé cette frame
+			typed := ebiten.InputChars()
+			if len(typed) > 0 {
+				g.CurrentCode += string(typed)
+			}
+
+			// 3. Supprimer un caractère avec Backspace
+			if ebiten.IsKeyPressed(ebiten.KeyBackspace) && len(g.CurrentCode) > 0 {
+				g.CurrentCode = g.CurrentCode[:len(g.CurrentCode)-1]
+			}
+
+			// 4. Fin de la saisie si l’utilisateur appuie sur Enter
+			if ebiten.IsKeyPressed(ebiten.KeyEnter) {
+				g.EnterCNT++
+				if g.EnterCNT == 1 {
+					for _, score := range g.Save.Top5 {
+						if score.UserName == g.currentUserName {
+							if g.CurrentCode == score.Code {
+								g.State++
+								return nil
+							} else {
+								g.InvalidCode = true
+								g.TSICM = 60
+							}
+						}
+					}
+				}
+			} else {
+				g.EnterCNT = 0
+			}
 		}
 	}
 	if g.Level == 8 {
-		g.State = 4
+		g.State = 5
 	}
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	if g.State > 1 {
+	if g.State > 2 {
 		//draw Lifes
 		g.DrawLifes(screen)
 		//draw Level
@@ -689,13 +760,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		//draw player
 		ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 		//draw version
-		ebitenutil.DebugPrintAt(screen, "version 1.1", 550, 460)
+		ebitenutil.DebugPrintAt(screen, "version 1.4", 550, 460)
 		//draw timer
 		g.DrawTimer(screen)
 		//draw change level animation
 		ebitenutil.DrawRect(screen, 0, 0, 640, 480, color.RGBA{0, 0, 0, uint8(g.Opacity)})
 		//draw Restart button
-		if g.State == 4 {
+		if g.State == 5 {
 			ebitenutil.DrawRect(screen, 170, 183, 312, 63, color.RGBA{0, 255, 0, 255})
 			op := &text.DrawOptions{}
 			op.GeoM.Translate(float64(171), float64(190))
@@ -716,6 +787,31 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}, op)
 	}
 	if g.State == 2 {
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(100, 200) // même position verticale que UserName
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, "Enter a code", &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   30, // même taille que UserName
+		}, op)
+		op = &text.DrawOptions{}
+		op.GeoM.Translate(float64(50), float64(300))
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, fmt.Sprintf("Code: %s", g.CurrentCode), &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   30,
+		}, op)
+		if g.TSICM > 0 {
+			op := &text.DrawOptions{}
+			op.GeoM.Translate(10, 420) // même position verticale que UserName
+			op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+			text.Draw(screen, "Invalid code", &text.GoTextFace{
+				Source: mplusFaceSource,
+				Size:   30, // même taille que UserName
+			}, op)
+		}
+	}
+	if g.State == 3 {
 		ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
 		for i, s := range g.Save.Top5 {
 			op := &text.DrawOptions{}
@@ -765,8 +861,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			msg = "Username must be alphanumeric."
 		case 3:
 			msg = "Username cannot be empty."
-		case 4:
-			msg = "Username already exists."
 		default:
 			msg = "Unknown username error."
 		}
