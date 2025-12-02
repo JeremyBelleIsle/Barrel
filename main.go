@@ -291,6 +291,17 @@ func (g *Game) DrawLevel(screen *ebiten.Image) error {
 	}, op)
 	return nil
 }
+func (g *Game) DrawRestartButton(screen *ebiten.Image) error {
+	ebitenutil.DrawRect(screen, 170, 183, 312, 63, color.RGBA{0, 255, 0, 255})
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(171), float64(190))
+	op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+	text.Draw(screen, "Restart", &text.GoTextFace{
+		Source: mplusFaceSource,
+		Size:   45,
+	}, op)
+	return nil
+}
 func SaveToDisk(data SaveData, filename string) error {
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -400,6 +411,7 @@ func (g *Game) Update() error {
 					g.endTime = 0
 					g.EndTimeIsSet = false
 					g.Opacity = 0
+					g.DataAreSave = false
 					g.ChangeLevelAnimation = false
 					g.Generate_Level(g.Level)
 					g.State = 3
@@ -424,12 +436,45 @@ func (g *Game) Update() error {
 			g.EndTimeIsSet = true
 		}
 		if g.State == 5 && !g.DataAreSave {
-			// Ajouter le temps du joueur
-			g.Save.Top5 = append(g.Save.Top5, Score{
-				Time:     g.endTime,
-				UserName: g.currentUserName,
-				Code:     g.CurrentCode,
-			})
+
+			nameExist := false
+			for _, score := range g.Save.Top5 {
+				if g.currentUserName == score.UserName {
+					nameExist = true
+					break
+				}
+			}
+
+			if !nameExist {
+				// Ajout normal
+				g.Save.Top5 = append(g.Save.Top5, Score{
+					Time:     g.endTime,
+					UserName: g.currentUserName,
+					Code:     g.CurrentCode,
+				})
+			} else {
+
+				// --- 🔥 VERSION QUI SUPPRIME L’ANCIEN SCORE AVANT D'AJOUTER LE NOUVEAU ---
+				for i, score := range g.Save.Top5 {
+					if g.currentUserName == score.UserName {
+
+						if score.Time > g.endTime {
+
+							//delete l'ancien score
+							g.Save.Top5 = append(g.Save.Top5[:i], g.Save.Top5[i+1:]...)
+
+							// Ajouter le nouveau score
+							g.Save.Top5 = append(g.Save.Top5, Score{
+								Time:     g.endTime,
+								UserName: g.currentUserName,
+								Code:     g.CurrentCode,
+							})
+						}
+
+						break
+					}
+				}
+			}
 
 			// Trier et garder seulement les 5 meilleurs
 			slices.SortFunc(g.Save.Top5, CmpTime)
@@ -570,20 +615,6 @@ func (g *Game) Update() error {
 				g.PlayerSpeed = 15
 			}
 		}
-
-		// --- MOUVEMENT DU PLAYER ---
-		if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.PlayerMoved {
-			g.PlayerMoved = true
-			g.SpaceCNT++
-			if g.SpaceCNT == 1 {
-				g.State++
-				g.StartTime = time.Now()
-			}
-		}
-		if g.PlayerMoved {
-			g.PlayerX += g.PlayerSpeed
-		}
-
 		// --- COLLISIONS AVEC BARILS ---
 		for _, b := range g.Barrels {
 			x := b.x + 125
@@ -613,6 +644,24 @@ func (g *Game) Update() error {
 					g.PlayerSpeed = 15
 				}
 			}
+		}
+		// --- MOUVEMENT DU PLAYER ---
+		if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.PlayerMoved && g.Opacity <= 0 {
+			if g.PlayerSpeed == 15 {
+				g.PlayerX += 10
+			}
+			if g.PlayerSpeed == -15 {
+				g.PlayerX -= 10
+			}
+			g.PlayerMoved = true
+			g.SpaceCNT++
+			if g.SpaceCNT == 1 {
+				g.State++
+				g.StartTime = time.Now()
+			}
+		}
+		if g.PlayerMoved {
+			g.PlayerX += g.PlayerSpeed
 		}
 
 		// --- BOUNCERS ---
@@ -731,10 +780,12 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	if g.State > 2 {
-		//draw Lifes
-		g.DrawLifes(screen)
-		//draw Level
-		g.DrawLevel(screen)
+		if g.State != 5 {
+			//draw Lifes
+			g.DrawLifes(screen)
+			//draw Level
+			g.DrawLevel(screen)
+		}
 		//draw barrels
 		for _, b := range g.Barrels {
 			ebitenutil.DrawRect(screen, b.x, b.y, b.w, b.h, b.color)
@@ -775,6 +826,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				Source: mplusFaceSource,
 				Size:   45,
 			}, op)
+
+			ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
+			for i, s := range g.Save.Top5 {
+				op := &text.DrawOptions{}
+				op.GeoM.Translate(float64(100), float64(20*i+300))
+				op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+				text.Draw(screen, fmt.Sprintf("%d. %v. - %s", i+1, s.Time, s.UserName), &text.GoTextFace{
+					Source: mplusFaceSource,
+					Size:   20,
+				}, op)
+			}
 		}
 	}
 	if g.State == 0 {
