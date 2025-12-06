@@ -22,6 +22,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hajimehoshi/go-mp3"
 )
 
 const (
@@ -52,6 +53,7 @@ type BarrelsS struct {
 	Moved       bool
 	fragile     bool
 	Teleporter  bool
+	Magic       bool
 	TeleporterX float64
 	TeleporterY float64
 	CoolDown    int
@@ -89,7 +91,25 @@ type Game struct {
 	EndTimeIsSet          bool
 	DataAreSave           bool
 	Opacity               float64
+	SlowMotion            bool
+	slowMotionAnimation   bool
+	slowMotionCooldown    float64
 	teleportSound         *audio.Player
+	ExplosionSound        *audio.Player
+	WinSound              *audio.Player
+	loseSound             *audio.Player
+	loseSound2            *audio.Player
+	BouncerSound          *audio.Player
+	LevelCompledSound     *audio.Player
+	Levelplus             *audio.Player
+	barrelShootSound      *audio.Player
+	RaceStartSound        *audio.Player
+	crackSound            *audio.Player
+	hitSound              *audio.Player
+	NameConfirmSound      *audio.Player
+	slowMotionSound       *audio.Player
+	player                *audio.Player
+	BouncerSoundCooldown  float64
 	OpacityPlusOrNegative bool
 	ChangeLevelAnimation  bool
 	EndOfRun              bool
@@ -113,6 +133,10 @@ type Game struct {
 
 var (
 	mplusFaceSource *text.GoTextFaceSource
+	backgroundX     float64
+	backgroundY     float64
+	backgroundW     float64
+	backgroundH     float64
 )
 var audioContext = audio.NewContext(44100)
 
@@ -162,12 +186,14 @@ func LoadSound(path string) (*audio.Player, error) {
 	switch ext {
 
 	case ".wav":
-		stream, err := wav.Decode(audioContext, bytes.NewReader(data))
+		stream, err := wav.DecodeWithSampleRate(44000, bytes.NewReader(data))
+		// stream, err := wav.Decode(audioContext, bytes.NewReader(data))
 		if err != nil {
 			return nil, fmt.Errorf("cannot decode wav %q: %w", path, err)
 		}
 		fmt.Printf("Sound load with success!")
-		return audio.NewPlayer(audioContext, stream)
+		return audioContext.NewPlayer(stream)
+		// return audio.NewPlayer(audioContext, stream)
 
 	case ".ogg", ".oga", ".vorbis":
 		stream, err := vorbis.Decode(audioContext, bytes.NewReader(data))
@@ -176,6 +202,14 @@ func LoadSound(path string) (*audio.Player, error) {
 		}
 		fmt.Printf("Sound load with success!")
 		return audio.NewPlayer(audioContext, stream)
+
+	case ".mp3":
+		d, err := mp3.NewDecoder(bytes.NewReader(data))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return audioContext.NewPlayer(d)
 
 	default:
 		return nil, fmt.Errorf("unsupported audio extension %q", ext)
@@ -186,17 +220,17 @@ func (g *Game) Generate_Level(L int) {
 	switch L {
 	case 1:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 215, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Bouncers = []BouncersS{}
 		g.Obstacles = []ObstaclesS{}
 		return
 	case 2:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, true, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 215, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 215, 100, 50, true, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Bouncers = []BouncersS{
 			{407, 300, 50, 50, color.RGBA{58, 110, 165, 255}},
@@ -205,9 +239,9 @@ func (g *Game) Generate_Level(L int) {
 		return
 	case 3:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 81, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, true, 0, 0, 100, color.RGBA{138, 43, 226, 255}},
+			{400, 81, 100, 50, true, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{407, 350, 50, 50, false, true, color.RGBA{178, 34, 34, 255}},
@@ -216,9 +250,9 @@ func (g *Game) Generate_Level(L int) {
 		return
 	case 4:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 81, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 400, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 81, 100, 50, true, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 400, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{205, 81, 50, 50, true, true, color.RGBA{178, 34, 34, 255}},
@@ -228,10 +262,10 @@ func (g *Game) Generate_Level(L int) {
 		}
 	case 5:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{270, 0, 100, 50, true, true, true, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{375, 250, 100, 50, false, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{270, 0, 100, 50, true, true, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{375, 250, 100, 50, false, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{240, 300, 50, 50, true, false, color.RGBA{178, 34, 34, 255}},
@@ -240,20 +274,20 @@ func (g *Game) Generate_Level(L int) {
 		g.Bouncers = []BouncersS{}
 	case 6:
 		g.Barrels = []BarrelsS{
-			{50, 215, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{400, 215, 100, 50, true, false, false, true, 330, 75, 100, color.RGBA{139, 69, 19, 255}},
-			{250, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 215, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{400, 215, 100, 50, true, false, false, true, false, 330, 75, 100, color.RGBA{139, 69, 19, 255}},
+			{250, 50, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{}
 		g.Bouncers = []BouncersS{}
 
 	case 7:
 		g.Barrels = []BarrelsS{
-			{50, 375, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{350, 215, 100, 50, true, true, false, true, 530, 240, 100, color.RGBA{139, 69, 19, 255}},
-			{450, 215, 100, 50, false, true, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
-			{490, 50, 100, 50, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{50, 375, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{350, 215, 100, 50, true, true, false, true, false, 530, 240, 100, color.RGBA{139, 69, 19, 255}},
+			{450, 215, 100, 50, false, true, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
+			{490, 50, 100, 50, true, false, false, false, false, 0, 0, 100, color.RGBA{139, 69, 19, 255}},
 		}
 		g.Obstacles = []ObstaclesS{
 			{270, 300, 50, 50, false, false, color.RGBA{178, 34, 34, 255}},
@@ -302,6 +336,36 @@ func (g *Game) DrawRestartButton(screen *ebiten.Image) error {
 	}, op)
 	return nil
 }
+func AnimateBackground(backgroundX, backgroundY, backgroundW, backgroundH float64) (float64, float64, float64, float64) {
+	// Animation en hauteur
+	if backgroundH < 480 {
+		backgroundH += 4.5
+		backgroundY -= 4.5 / 2.0
+	}
+
+	// Animation en largeur
+	if backgroundW < 640 {
+		backgroundW += 6
+		backgroundX -= 6.0 / 2.0
+	}
+
+	return backgroundX, backgroundY, backgroundW, backgroundH
+}
+
+func (g *Game) DrawTop5(screen *ebiten.Image) error {
+	ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
+	for i, s := range g.Save.Top5 {
+		op := &text.DrawOptions{}
+		op.GeoM.Translate(float64(100), float64(20*i+300))
+		op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+		text.Draw(screen, fmt.Sprintf("%d. %v. - %s", i+1, s.Time, s.UserName), &text.GoTextFace{
+			Source: mplusFaceSource,
+			Size:   20,
+		}, op)
+	}
+	return nil
+}
+
 func SaveToDisk(data SaveData, filename string) error {
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -349,6 +413,14 @@ func (g *Game) Update() error {
 	}
 	if g.TimeSaveAnimation == 0 && g.State == 1 {
 		g.State++
+		g.NameConfirmSound.Rewind()
+		g.NameConfirmSound.Play()
+	}
+	if g.BouncerSoundCooldown > 0 {
+		g.BouncerSoundCooldown--
+	}
+	if g.slowMotionCooldown > 0 {
+		g.slowMotionCooldown--
 	}
 	if g.TimeSaveAnimation == 1 && g.State == 1 {
 		if len(g.currentUserName) > 7 {
@@ -375,6 +447,9 @@ func (g *Game) Update() error {
 		g.Save = SaveData{}
 	}
 	if g.State > 2 {
+		if g.player.Volume() < 0.4 {
+			g.player.SetVolume(g.player.Volume() + 0.004)
+		}
 		xC, yC := ebiten.CursorPosition()
 		x, y := float64(xC), float64(yC)
 		if g.ChangeLevelAnimation && g.Opacity > 255 {
@@ -407,6 +482,7 @@ func (g *Game) Update() error {
 					g.SpaceCNT = 0
 					g.PlayerBarrel = 0
 					g.PlayerMoved = false
+					g.SlowMotion = false
 					g.StartTime = time.Time{}
 					g.endTime = 0
 					g.EndTimeIsSet = false
@@ -419,6 +495,8 @@ func (g *Game) Update() error {
 			}
 		}
 		if g.ChangeLevelAnimation && g.Opacity <= 0 {
+			g.Levelplus.Rewind()
+			g.Levelplus.Play()
 			g.ChangeLevelAnimation = false
 			g.Opacity = 0
 			if g.Level != 7 {
@@ -436,7 +514,8 @@ func (g *Game) Update() error {
 			g.EndTimeIsSet = true
 		}
 		if g.State == 5 && !g.DataAreSave {
-
+			g.WinSound.Rewind()
+			g.WinSound.Play()
 			nameExist := false
 			for _, score := range g.Save.Top5 {
 				if g.currentUserName == score.UserName {
@@ -488,11 +567,14 @@ func (g *Game) Update() error {
 
 		}
 		if g.PlayerLife == 0 {
+			g.loseSound.Rewind()
+			g.loseSound.Play()
 			g.Level = 1
 			g.PlayerX = 160
 			g.PlayerY = 240
 			g.PlayerLife = 3
 			g.PlayerSpeed = 15
+			g.SlowMotion = false
 			defer g.Generate_Level(g.Level)
 		}
 		if g.TimeBeforeLevelDown > 0 {
@@ -527,6 +609,8 @@ func (g *Game) Update() error {
 			}
 			g.PlayerSpeed = 15
 			g.PlayerLife--
+			g.loseSound2.Rewind()
+			g.loseSound2.Play()
 		}
 
 		// --- SUPPRESSION DES BARILS ---
@@ -546,9 +630,17 @@ func (g *Game) Update() error {
 				}
 
 				if b.BarrelsDirY {
-					b.y += 2
+					if g.SlowMotion {
+						b.y += 0.7
+					} else {
+						b.y += 2
+					}
 				} else {
-					b.y -= 2
+					if g.SlowMotion {
+						b.y -= 0.7
+					} else {
+						b.y -= 2
+					}
 				}
 
 				// Player sur le baril = il reste dessus
@@ -556,16 +648,45 @@ func (g *Game) Update() error {
 					g.PlayerY = b.y + 25
 				}
 			}
+			// ---- BARILS MAGIQUES ----
+			if b.Magic && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
+				if !g.slowMotionAnimation {
+					g.slowMotionAnimation = true
+					g.slowMotionCooldown = 60
+				}
+				if !g.ChangeLevelAnimation {
+					if !g.SlowMotion {
+						g.slowMotionSound.Rewind()
+						g.slowMotionSound.Play()
+					}
+					g.SlowMotion = true
+					if g.PlayerSpeed > 0 {
+						g.PlayerSpeed = 6 // Vitesse réduite positive
+					} else {
+						g.PlayerSpeed = -6 // Vitesse réduite négative
+					}
+				}
+			}
 
 			// ---- BARILS FRAGILES ----
 			if b.fragile && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
 				b.CoolDown--
 				b.color = color.RGBA{255, 0, 0, 255}
+				if b.CoolDown == 80 {
+					g.crackSound.Rewind()
+					g.crackSound.Play()
+				}
 				if b.CoolDown <= 0 && !g.ChangeLevelAnimation {
+					g.ExplosionSound.Rewind()
+					g.ExplosionSound.Play()
 					g.TimeBeforeLevelDown = 45
 					g.SpawnBarrelExplosion(b.x, b.y)
 					deleteBarrels = append(deleteBarrels, i)
-					b.CoolDown = 100
+					if g.SlowMotion {
+						b.CoolDown = 235
+					} else {
+						b.CoolDown = 100
+					}
 				}
 			}
 			if b.Teleporter && CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, b.x, b.y, b.w, b.h) {
@@ -613,6 +734,10 @@ func (g *Game) Update() error {
 				}
 				g.PlayerLife--
 				g.PlayerSpeed = 15
+				g.loseSound2.Rewind()
+				g.loseSound2.Play()
+				g.hitSound.Rewind()
+				g.hitSound.Play()
 			}
 		}
 		// --- COLLISIONS AVEC BARILS ---
@@ -625,14 +750,21 @@ func (g *Game) Update() error {
 				w = b.w
 			}
 
-			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, x, b.y, w, b.h) {
-
+			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, x, b.y, w, b.h) && g.PlayerMoved {
 				g.PlayerMoved = false
-				g.PlayerSpeed = 15
-
+				if !b.Magic {
+					g.SlowMotion = false
+					g.PlayerSpeed = 15
+				}
+				if !g.PlayerMoved && !b.Magic {
+					g.SlowMotion = false
+				}
 				// --- CHANGER DE NIVEAU ---
 				if b.x == 490 && !g.ChangeLevelAnimation {
 					g.Level++
+					g.SlowMotion = false
+					g.WinSound.Rewind()
+					g.WinSound.Play()
 					g.ChangeLevelAnimation = true
 					if g.Level != 7 {
 						g.PlayerX = 160
@@ -647,16 +779,17 @@ func (g *Game) Update() error {
 		}
 		// --- MOUVEMENT DU PLAYER ---
 		if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.PlayerMoved && g.Opacity <= 0 {
-			if g.PlayerSpeed == 15 {
-				g.PlayerX += 10
+			if g.SlowMotion {
+				g.PlayerX += 40
 			}
-			if g.PlayerSpeed == -15 {
-				g.PlayerX -= 10
-			}
+			g.barrelShootSound.Rewind()
+			g.barrelShootSound.Play()
 			g.PlayerMoved = true
 			g.SpaceCNT++
 			if g.SpaceCNT == 1 {
 				g.State++
+				g.RaceStartSound.Rewind()
+				g.RaceStartSound.Play()
 				g.StartTime = time.Now()
 			}
 		}
@@ -668,6 +801,11 @@ func (g *Game) Update() error {
 		for _, boun := range g.Bouncers {
 			if CircleRectCollision(g.PlayerX, g.PlayerY, PlayerR, boun.x, boun.y, boun.w, boun.h) {
 				g.PlayerSpeed = -15
+				if g.BouncerSoundCooldown <= 0 {
+					g.BouncerSound.Rewind()
+					g.BouncerSound.Play()
+					g.BouncerSoundCooldown = 25
+				}
 			}
 		}
 		for i := 0; i < len(g.Particles); i++ {
@@ -780,12 +918,16 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	if g.State > 2 {
+		//draw background
+		backgroundX, backgroundY, backgroundW, backgroundH = AnimateBackground(backgroundX, backgroundY, backgroundW, backgroundH)
+		ebitenutil.DrawRect(screen, backgroundX, backgroundY, backgroundW, backgroundH, color.RGBA{221, 182, 242, 125})
 		if g.State != 5 {
 			//draw Lifes
 			g.DrawLifes(screen)
 			//draw Level
 			g.DrawLevel(screen)
 		}
+
 		//draw barrels
 		for _, b := range g.Barrels {
 			ebitenutil.DrawRect(screen, b.x, b.y, b.w, b.h, b.color)
@@ -808,36 +950,30 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				ebitenutil.DrawLine(screen, b.x, b.y, b.TeleporterX, b.TeleporterY, color.White)
 			}
 		}
+		//draw slowMotion
+		if g.slowMotionCooldown > 0 {
+			op := &text.DrawOptions{}
+			op.GeoM.Translate(float64(50), float64(200))
+			op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
+			text.Draw(screen, "Slow Motion!", &text.GoTextFace{
+				Source: mplusFaceSource,
+				Size:   45,
+			}, op)
+		}
 		//draw player
 		ebitenutil.DrawCircle(screen, g.PlayerX, g.PlayerY, PlayerR, color.RGBA{255, 255, 0, 255})
 		//draw version
 		ebitenutil.DebugPrintAt(screen, "version 1.4", 550, 460)
 		//draw timer
 		g.DrawTimer(screen)
+
+		//draw Restart button and top 5
+		if g.State == 5 {
+			g.DrawRestartButton(screen)
+			g.DrawTop5(screen)
+		}
 		//draw change level animation
 		ebitenutil.DrawRect(screen, 0, 0, 640, 480, color.RGBA{0, 0, 0, uint8(g.Opacity)})
-		//draw Restart button
-		if g.State == 5 {
-			ebitenutil.DrawRect(screen, 170, 183, 312, 63, color.RGBA{0, 255, 0, 255})
-			op := &text.DrawOptions{}
-			op.GeoM.Translate(float64(171), float64(190))
-			op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
-			text.Draw(screen, "Restart", &text.GoTextFace{
-				Source: mplusFaceSource,
-				Size:   45,
-			}, op)
-
-			ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
-			for i, s := range g.Save.Top5 {
-				op := &text.DrawOptions{}
-				op.GeoM.Translate(float64(100), float64(20*i+300))
-				op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
-				text.Draw(screen, fmt.Sprintf("%d. %v. - %s", i+1, s.Time, s.UserName), &text.GoTextFace{
-					Source: mplusFaceSource,
-					Size:   20,
-				}, op)
-			}
-		}
 	}
 	if g.State == 0 {
 		op := &text.DrawOptions{}
@@ -874,16 +1010,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 	if g.State == 3 {
-		ebitenutil.DrawRect(screen, 50, 300, 500, 100, color.RGBA{0, 255, 0, 255})
-		for i, s := range g.Save.Top5 {
-			op := &text.DrawOptions{}
-			op.GeoM.Translate(float64(100), float64(20*i+300))
-			op.ColorScale.ScaleWithColor(color.RGBA{255, 255, 255, 255})
-			text.Draw(screen, fmt.Sprintf("%d. %v. - %s", i+1, s.Time, s.UserName), &text.GoTextFace{
-				Source: mplusFaceSource,
-				Size:   20,
-			}, op)
-		}
+		g.DrawTop5(screen)
 	}
 	if g.State == 1 {
 		op := &text.DrawOptions{}
@@ -944,12 +1071,17 @@ func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello World")
 	save, err := LoadFromDisk("save.json")
+	backgroundX = 319
+	backgroundY = 239
+	backgroundW = 2
+	backgroundH = 2
 	if err != nil {
 		fmt.Println("file save.json are mepty")
 		save = SaveData{
 			Top5: []Score{}, // initialiser le slice vide
 		}
 	}
+
 	g := &Game{
 		Save:                  save,
 		PlayerY:               240,
@@ -972,6 +1104,7 @@ func main() {
 				Moved:       false,
 				fragile:     false,
 				Teleporter:  false,
+				Magic:       false,
 				TeleporterX: 0,
 				TeleporterY: 0,
 				CoolDown:    100,
@@ -986,6 +1119,7 @@ func main() {
 				Moved:       false,
 				fragile:     false,
 				Teleporter:  false,
+				Magic:       false,
 				TeleporterX: 0,
 				TeleporterY: 0,
 				CoolDown:    100,
@@ -994,10 +1128,54 @@ func main() {
 		},
 	}
 
-	g.teleportSound, err = LoadSound("laserLarge_004.ogg")
+	f, err := os.Open("mixkit-infected-vibes-157.mp3")
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
+
+	d, err := mp3.NewDecoder(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	il := audio.NewInfiniteLoop(d, d.Length())
+
+	g.player, err = audioContext.NewPlayer(il)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	g.player.Play()
+
+	g.player.SetVolume(0.1)
+
+	g.teleportSound, _ = LoadSound("laserLarge_004.ogg")
+	g.ExplosionSound, _ = LoadSound("explosionCrunch_003.ogg")
+	g.WinSound, _ = LoadSound("mixkit-small-win-2020.wav")
+	g.Levelplus, _ = LoadSound("mixkit-technology-transition-slide-3120.wav")
+	g.loseSound, _ = LoadSound("mixkit-player-losing-or-failing-2042.wav")
+	g.loseSound2, _ = LoadSound("mixkit-losing-bleeps-2026.wav")
+	g.BouncerSound, _ = LoadSound("mixkit-boing-hit-sound-2894.wav")
+	g.barrelShootSound, _ = LoadSound("mixkit-game-ball-tap-2073.wav")
+	g.RaceStartSound, _ = LoadSound("mixkit-melodic-race-countdown-1955.wav")
+	g.crackSound, _ = LoadSound("mixkit-bone-breaking-with-echo-2937.wav")
+	g.hitSound, _ = LoadSound("mixkit-cowbell-sharp-hit-1743.wav")
+	g.slowMotionSound, _ = LoadSound("mixkit-fast-swipe-zoom-2627.wav")
+	g.NameConfirmSound, _ = LoadSound("mixkit-sci-fi-confirmation-914.mp3")
+	if g.NameConfirmSound == nil {
+		log.Println("Attention: NameConfirmSound non trouvé...Utilisation d'un autre son pour le remplacer.")
+		g.NameConfirmSound = g.slowMotionSound
+	}
+	g.teleportSound.SetVolume(0.75)
+	g.ExplosionSound.SetVolume(0.75)
+	g.WinSound.SetVolume(0.75)
+	g.loseSound.SetVolume(0.75)
+	g.loseSound2.SetVolume(0.75)
+	g.BouncerSound.SetVolume(0.75)
+	g.barrelShootSound.SetVolume(0.75)
+	g.RaceStartSound.SetVolume(0.75)
+	g.crackSound.SetVolume(1)
 
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)

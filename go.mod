@@ -2,7 +2,10 @@ module Barrel
 
 go 1.24.5
 
-require github.com/hajimehoshi/ebiten/v2 v2.9.4
+require (
+	github.com/hajimehoshi/ebiten/v2 v2.9.4
+	github.com/hajimehoshi/go-mp3 v0.3.4
+)
 
 require (
 	github.com/ebitengine/gomobile v0.0.0-20250923094054-ea854a63cce1 // indirect
